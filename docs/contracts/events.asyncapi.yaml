@@ -1,0 +1,1035 @@
+asyncapi: 2.6.0
+id: urn:ticket-flow:orders
+info:
+  title: Ticket Flow — доменные события
+  version: 1.0.0
+  description: 'Точка зрения приложения Orders: subscribe получает факты Reservations / Payments, publish отправляет
+    факты Orders. x-producer указывает фактического издателя. HTTP-команды описаны OpenAPI. Доставка at least once;
+    повтор сохраняет messageId.'
+  contact:
+    name: Ticket Flow project
+    url: https://github.com/Jaeger172/ticket-flow
+defaultContentType: application/json
+servers:
+  local:
+    url: rabbitmq:5672
+    protocol: amqp
+    protocolVersion: 0-9-1
+    description: Внутренняя сеть Compose; durable topic exchange ticket-flow.events.
+    security:
+    - brokerCredentials: []
+channels:
+  reservation.held.v1:
+    description: Reservations публикует ReservationHeld. Направление операции указано с позиции Orders.
+    x-producer: Reservations
+    x-consumer: Orders
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    subscribe:
+      operationId: receiveReservationHeld
+      message:
+        $ref: '#/components/messages/ReservationHeld'
+  reservation.confirmed.v1:
+    description: Reservations публикует ReservationConfirmed. Направление операции указано с позиции Orders.
+    x-producer: Reservations
+    x-consumer: Orders
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    subscribe:
+      operationId: receiveReservationConfirmed
+      message:
+        $ref: '#/components/messages/ReservationConfirmed'
+  reservation.released.v1:
+    description: Reservations публикует ReservationReleased. Направление операции указано с позиции Orders.
+    x-producer: Reservations
+    x-consumer: Orders
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    subscribe:
+      operationId: receiveReservationReleased
+      message:
+        $ref: '#/components/messages/ReservationReleased'
+  reservation.expired.v1:
+    description: Reservations публикует ReservationExpired. Направление операции указано с позиции Orders.
+    x-producer: Reservations
+    x-consumer: Orders
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    subscribe:
+      operationId: receiveReservationExpired
+      message:
+        $ref: '#/components/messages/ReservationExpired'
+  payment.succeeded.v1:
+    description: Payments публикует PaymentSucceeded. Направление операции указано с позиции Orders.
+    x-producer: Payments
+    x-consumer: Orders
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    subscribe:
+      operationId: receivePaymentSucceeded
+      message:
+        $ref: '#/components/messages/PaymentSucceeded'
+  payment.failed.v1:
+    description: Payments публикует PaymentFailed. Направление операции указано с позиции Orders.
+    x-producer: Payments
+    x-consumer: Orders
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    subscribe:
+      operationId: receivePaymentFailed
+      message:
+        $ref: '#/components/messages/PaymentFailed'
+  payment.cancelled.v1:
+    description: Payments публикует PaymentCancelled. Направление операции указано с позиции Orders.
+    x-producer: Payments
+    x-consumer: Orders
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    subscribe:
+      operationId: receivePaymentCancelled
+      message:
+        $ref: '#/components/messages/PaymentCancelled'
+  payment.refunded.v1:
+    description: Payments публикует PaymentRefunded. Направление операции указано с позиции Orders.
+    x-producer: Payments
+    x-consumer: Orders
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    subscribe:
+      operationId: receivePaymentRefunded
+      message:
+        $ref: '#/components/messages/PaymentRefunded'
+  order.confirmed.v1:
+    description: Orders публикует OrderConfirmed. Направление операции указано с позиции Orders.
+    x-producer: Orders
+    x-consumer: Необязательные будущие подписчики
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    publish:
+      operationId: publishOrderConfirmed
+      message:
+        $ref: '#/components/messages/OrderConfirmed'
+  order.cancelled.v1:
+    description: Orders публикует OrderCancelled. Направление операции указано с позиции Orders.
+    x-producer: Orders
+    x-consumer: Необязательные будущие подписчики
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ticket-flow.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+    publish:
+      operationId: publishOrderCancelled
+      message:
+        $ref: '#/components/messages/OrderCancelled'
+components:
+  securitySchemes:
+    brokerCredentials:
+      type: userPassword
+  messages:
+    ReservationHeld:
+      messageId: ReservationHeld
+      name: ReservationHeld
+      title: ReservationHeld
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - ReservationHeld
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - reservationId
+            - orderId
+            - eventId
+            - seatId
+            - amountMinor
+            - currency
+            - expiresAt
+            properties:
+              reservationId:
+                type: string
+                format: uuid
+              orderId:
+                type: string
+                format: uuid
+              eventId:
+                type: string
+                format: uuid
+              seatId:
+                type: string
+                format: uuid
+              amountMinor:
+                type: integer
+                format: int64
+                minimum: 1
+                maximum: 1000000000
+                description: Сумма в копейках; без float.
+              currency:
+                type: string
+                enum:
+                - RUB
+              expiresAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000001
+          eventType: ReservationHeld
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 22222222-2222-4222-8222-222222222222
+          aggregateVersion: 1
+          data:
+            reservationId: 22222222-2222-4222-8222-222222222222
+            orderId: 11111111-1111-4111-8111-111111111111
+            eventId: 44444444-4444-4444-8444-444444444444
+            seatId: 55555555-5555-4555-8555-555555555555
+            amountMinor: 250000
+            currency: RUB
+            expiresAt: '2026-11-07T12:00:00Z'
+    ReservationConfirmed:
+      messageId: ReservationConfirmed
+      name: ReservationConfirmed
+      title: ReservationConfirmed
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - ReservationConfirmed
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - reservationId
+            - orderId
+            - eventId
+            - seatId
+            - confirmedAt
+            properties:
+              reservationId:
+                type: string
+                format: uuid
+              orderId:
+                type: string
+                format: uuid
+              eventId:
+                type: string
+                format: uuid
+              seatId:
+                type: string
+                format: uuid
+              confirmedAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000002
+          eventType: ReservationConfirmed
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 22222222-2222-4222-8222-222222222222
+          aggregateVersion: 1
+          data:
+            reservationId: 22222222-2222-4222-8222-222222222222
+            orderId: 11111111-1111-4111-8111-111111111111
+            eventId: 44444444-4444-4444-8444-444444444444
+            seatId: 55555555-5555-4555-8555-555555555555
+            confirmedAt: '2026-11-07T12:00:00Z'
+    ReservationReleased:
+      messageId: ReservationReleased
+      name: ReservationReleased
+      title: ReservationReleased
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - ReservationReleased
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - reservationId
+            - orderId
+            - releasedAt
+            properties:
+              reservationId:
+                type: string
+                format: uuid
+              orderId:
+                type: string
+                format: uuid
+              releasedAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000003
+          eventType: ReservationReleased
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 22222222-2222-4222-8222-222222222222
+          aggregateVersion: 1
+          data:
+            reservationId: 22222222-2222-4222-8222-222222222222
+            orderId: 11111111-1111-4111-8111-111111111111
+            releasedAt: '2026-11-07T12:00:00Z'
+    ReservationExpired:
+      messageId: ReservationExpired
+      name: ReservationExpired
+      title: ReservationExpired
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - ReservationExpired
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - reservationId
+            - orderId
+            - expiredAt
+            properties:
+              reservationId:
+                type: string
+                format: uuid
+              orderId:
+                type: string
+                format: uuid
+              expiredAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000004
+          eventType: ReservationExpired
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 22222222-2222-4222-8222-222222222222
+          aggregateVersion: 1
+          data:
+            reservationId: 22222222-2222-4222-8222-222222222222
+            orderId: 11111111-1111-4111-8111-111111111111
+            expiredAt: '2026-11-07T12:00:00Z'
+    PaymentSucceeded:
+      messageId: PaymentSucceeded
+      name: PaymentSucceeded
+      title: PaymentSucceeded
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - PaymentSucceeded
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - paymentId
+            - orderId
+            - amountMinor
+            - currency
+            - capturedAt
+            properties:
+              paymentId:
+                type: string
+                format: uuid
+              orderId:
+                type: string
+                format: uuid
+              amountMinor:
+                type: integer
+                format: int64
+                minimum: 1
+                maximum: 1000000000
+                description: Сумма в копейках; без float.
+              currency:
+                type: string
+                enum:
+                - RUB
+              capturedAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000005
+          eventType: PaymentSucceeded
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 33333333-3333-4333-8333-333333333333
+          aggregateVersion: 1
+          data:
+            paymentId: 33333333-3333-4333-8333-333333333333
+            orderId: 11111111-1111-4111-8111-111111111111
+            amountMinor: 250000
+            currency: RUB
+            capturedAt: '2026-11-07T12:00:00Z'
+    PaymentFailed:
+      messageId: PaymentFailed
+      name: PaymentFailed
+      title: PaymentFailed
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - PaymentFailed
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - paymentId
+            - orderId
+            - reason
+            properties:
+              paymentId:
+                type: string
+                format: uuid
+              orderId:
+                type: string
+                format: uuid
+              reason:
+                type: string
+                minLength: 1
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000006
+          eventType: PaymentFailed
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 33333333-3333-4333-8333-333333333333
+          aggregateVersion: 1
+          data:
+            paymentId: 33333333-3333-4333-8333-333333333333
+            orderId: 11111111-1111-4111-8111-111111111111
+            reason: PAYMENT_DECLINED
+    PaymentCancelled:
+      messageId: PaymentCancelled
+      name: PaymentCancelled
+      title: PaymentCancelled
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - PaymentCancelled
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - paymentId
+            - orderId
+            - cancelledAt
+            properties:
+              paymentId:
+                type: string
+                format: uuid
+              orderId:
+                type: string
+                format: uuid
+              cancelledAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000007
+          eventType: PaymentCancelled
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 33333333-3333-4333-8333-333333333333
+          aggregateVersion: 1
+          data:
+            paymentId: 33333333-3333-4333-8333-333333333333
+            orderId: 11111111-1111-4111-8111-111111111111
+            cancelledAt: '2026-11-07T12:00:00Z'
+    PaymentRefunded:
+      messageId: PaymentRefunded
+      name: PaymentRefunded
+      title: PaymentRefunded
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - PaymentRefunded
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - paymentId
+            - orderId
+            - amountMinor
+            - currency
+            - refundedAt
+            properties:
+              paymentId:
+                type: string
+                format: uuid
+              orderId:
+                type: string
+                format: uuid
+              amountMinor:
+                type: integer
+                format: int64
+                minimum: 1
+                maximum: 1000000000
+                description: Сумма в копейках; без float.
+              currency:
+                type: string
+                enum:
+                - RUB
+              refundedAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000008
+          eventType: PaymentRefunded
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 33333333-3333-4333-8333-333333333333
+          aggregateVersion: 1
+          data:
+            paymentId: 33333333-3333-4333-8333-333333333333
+            orderId: 11111111-1111-4111-8111-111111111111
+            amountMinor: 250000
+            currency: RUB
+            refundedAt: '2026-11-07T12:00:00Z'
+    OrderConfirmed:
+      messageId: OrderConfirmed
+      name: OrderConfirmed
+      title: OrderConfirmed
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - OrderConfirmed
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - orderId
+            - reservationId
+            - paymentId
+            - ticketId
+            - eventId
+            - seatId
+            - amountMinor
+            - currency
+            - confirmedAt
+            properties:
+              orderId:
+                type: string
+                format: uuid
+              reservationId:
+                type: string
+                format: uuid
+              paymentId:
+                type: string
+                format: uuid
+              ticketId:
+                type: string
+                format: uuid
+              eventId:
+                type: string
+                format: uuid
+              seatId:
+                type: string
+                format: uuid
+              amountMinor:
+                type: integer
+                format: int64
+                minimum: 1
+                maximum: 1000000000
+                description: Сумма в копейках; без float.
+              currency:
+                type: string
+                enum:
+                - RUB
+              confirmedAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000009
+          eventType: OrderConfirmed
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 11111111-1111-4111-8111-111111111111
+          aggregateVersion: 1
+          data:
+            orderId: 11111111-1111-4111-8111-111111111111
+            reservationId: 22222222-2222-4222-8222-222222222222
+            paymentId: 33333333-3333-4333-8333-333333333333
+            ticketId: 66666666-6666-4666-8666-666666666666
+            eventId: 44444444-4444-4444-8444-444444444444
+            seatId: 55555555-5555-4555-8555-555555555555
+            amountMinor: 250000
+            currency: RUB
+            confirmedAt: '2026-11-07T12:00:00Z'
+    OrderCancelled:
+      messageId: OrderCancelled
+      name: OrderCancelled
+      title: OrderCancelled
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+        - messageId
+        - eventType
+        - occurredAt
+        - correlationId
+        - causationId
+        - aggregateId
+        - aggregateVersion
+        - data
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            enum:
+            - OrderCancelled
+          occurredAt:
+            type: string
+            format: date-time
+          correlationId:
+            type: string
+            format: uuid
+          causationId:
+            type: string
+            minLength: 1
+          aggregateId:
+            type: string
+            format: uuid
+          aggregateVersion:
+            type: integer
+            minimum: 1
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - orderId
+            - reservationId
+            - paymentId
+            - reason
+            - cancelledAt
+            properties:
+              orderId:
+                type: string
+                format: uuid
+              reservationId:
+                type: string
+                format: uuid
+              paymentId:
+                type: string
+                format: uuid
+              reason:
+                type: string
+                minLength: 1
+              cancelledAt:
+                type: string
+                format: date-time
+      examples:
+      - payload:
+          messageId: 77777777-7777-4777-8777-000000000010
+          eventType: OrderCancelled
+          occurredAt: '2026-11-07T12:00:00Z'
+          correlationId: 11111111-1111-4111-8111-111111111111
+          causationId: 11111111-1111-4111-8111-111111111111:operation
+          aggregateId: 11111111-1111-4111-8111-111111111111
+          aggregateVersion: 1
+          data:
+            orderId: 11111111-1111-4111-8111-111111111111
+            reservationId: 22222222-2222-4222-8222-222222222222
+            paymentId: 33333333-3333-4333-8333-333333333333
+            reason: PAYMENT_DECLINED
+            cancelledAt: '2026-11-07T12:00:00Z'
+tags:
+- name: ticket-purchase
+  description: Покупка билета и компенсации

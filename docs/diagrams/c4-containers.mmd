@@ -1,0 +1,53 @@
+flowchart TB
+  buyer["Покупатель
+Person"]
+  provider["Payment provider
+External software system
+Списание, отмена, возврат"]
+  subgraph tf["Ticket Flow — Software System"]
+    ui["Web UI
+Container: HTML / CSS / JavaScript
+Выбор места и карточка заказа"]
+    orders["Orders
+Container: Java / Spring Boot
+Заказ, Saga, билет"]
+    reservations["Reservations
+Container: Java / Spring Boot
+Каталог и владение местом"]
+    payments["Payments
+Container: Java / Spring Boot
+Платёжный адаптер и сверка"]
+    odb[("Orders DB
+Data store: PostgreSQL
+Заказы, Saga, inbox, outbox")]
+    rdb[("Reservations DB
+Data store: PostgreSQL
+Места, резервы, outbox")]
+    pdb[("Payments DB
+Data store: PostgreSQL
+Платежи, задания, outbox")]
+    broker["Event broker
+Container: RabbitMQ
+Устойчивые очереди и DLQ"]
+    ui -->|HTTPS / JSON: заказ и билет| orders
+    ui -->|HTTPS / JSON: каталог| reservations
+    orders -->|HTTP / JSON: резерв и подтверждение| reservations
+    orders -->|HTTP / JSON: оплата и отмена| payments
+    orders -->|SQL: собственные данные| odb
+    reservations -->|SQL: собственные данные| rdb
+    payments -->|SQL: собственные данные| pdb
+    reservations -->|AMQP: reservation.*.v1| broker
+    payments -->|AMQP: payment.*.v1| broker
+    orders -->|AMQP: order.*.v1| broker
+    broker -->|AMQP: результаты и ACK| orders
+  end
+  buyer -->|HTTPS: браузер| ui
+  buyer -->|HTTPS: платёжная страница| provider
+  payments -->|HTTPS / JSON: операции и сверка| provider
+  provider -->|HTTPS: подписанный callback| payments
+  classDef app fill:#eaf2ff,stroke:#315b96,color:#142b49
+  classDef store fill:#e8f4ef,stroke:#34765c,color:#153c2d
+  classDef external fill:#f3f4f6,stroke:#7b8492,color:#28313e
+  class ui,orders,reservations,payments,broker app
+  class odb,rdb,pdb store
+  class buyer,provider external

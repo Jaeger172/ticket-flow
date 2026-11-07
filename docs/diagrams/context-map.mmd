@@ -1,0 +1,21 @@
+flowchart TB
+  buyer["Покупатель"]
+  orders["Orders — покупка
+Заказ, Saga, билет"]
+  seats["Reservations — доступность
+Мероприятия, места, резервы"]
+  payments["Payments — деньги
+Оплата, сверка, возврат"]
+  provider["Внешний платёжный провайдер"]
+  buyer -->|Создать и проверить заказ| orders
+  buyer -->|Посмотреть мероприятия и места| seats
+  orders -->|Резервировать, подтвердить, освободить| seats
+  seats -.->|Факты о резерве| orders
+  orders -->|Создать или отменить платёж| payments
+  payments -.->|Факты об оплате и возврате| orders
+  payments -->|Платёжный адаптер| provider
+  provider -.->|Подписанные callbacks| payments
+  classDef core fill:#eaf2ff,stroke:#315b96,color:#142b49
+  classDef external fill:#f3f4f6,stroke:#7b8492,color:#28313e
+  class orders,seats,payments core
+  class buyer,provider external

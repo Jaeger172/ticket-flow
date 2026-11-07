@@ -1,0 +1,23 @@
+sequenceDiagram
+  autonumber
+  participant O as Orders
+  participant R as Reservations
+  participant P as Payments
+  participant X as Provider
+  Note over P,X: Списание CAPTURED, callback задержан
+  Note over R: Резерв HELD достигает expiresAt
+  R-->>O: ReservationExpired через RabbitMQ
+  Note over O: COMPENSATING, cancelRequested=true
+  O->>R: PUT: освободить резерв
+  R-->>O: 200 EXPIRED
+  O->>P: PUT: отменить оплату
+  P-->>O: 202 CANCEL_PENDING
+  P->>X: PUT: отменить списание
+  X-->>P: CAPTURED, отменить списание уже нельзя
+  Note over P: Сохранить REFUND_PENDING и задание
+  X->>P: Поздний подписанный callback CAPTURED
+  Note over P: Сверка не снимает цель отмены
+  P->>X: PUT: возврат, ключ id:refund
+  X-->>P: REFUNDED
+  P-->>O: PaymentRefunded через RabbitMQ
+  Note over O: Резерв истёк, деньги возвращены: CANCELLED

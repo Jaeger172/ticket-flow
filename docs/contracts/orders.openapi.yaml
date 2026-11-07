@@ -1,0 +1,318 @@
+openapi: 3.0.3
+info:
+  title: Ticket Flow — Orders API
+  version: 1.0.0
+  description: 'Публичный API покупателя. customerId берётся из JWT, не из тела. GET читает сохранённый снимок Orders.
+    Создание асинхронное: 202 не означает оплату или выдачу билета.'
+servers:
+- url: http://localhost:8081
+  description: Локальное демо; внешняя граница использует HTTPS.
+security:
+- BuyerToken: []
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Создать заказ на одно место
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '202':
+          description: Заказ и задание Saga сохранены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '200':
+          description: Повтор исходного запроса; текущее представление того же заказа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '409':
+          description: 'IDEMPOTENCY_CONFLICT: ключ использован с другим телом'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrder'
+      description: Цена от клиента не принимается. Idempotency-Key уникален в рамках customerId и POST /orders.
+        Повтор возвращает тот же orderId. Место резервируется фоновым шагом, поэтому его недоступность отражается
+        в состоянии заказа, а не обязательно HTTP-ошибкой POST.
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Получить собственный заказ
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Снимок заказа и при наличии билет
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Заказ отсутствует или принадлежит другому покупателю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: UI опрашивает раз в 2 секунды до конечного состояния. Кнопка возврата от провайдера не изменяет
+        статус заказа.
+components:
+  securitySchemes:
+    BuyerToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Проверяются подпись, срок и sub. В демо заранее выпущенный токен; отдельного auth-сервиса нет.
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - correlationId
+      properties:
+        code:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+        correlationId:
+          type: string
+          format: uuid
+    OwnerCommand:
+      type: object
+      additionalProperties: false
+      required:
+      - orderId
+      properties:
+        orderId:
+          type: string
+          format: uuid
+    CreateOrder:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - seatId
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        seatId:
+          type: string
+          format: uuid
+    Ticket:
+      type: object
+      additionalProperties: false
+      required:
+      - ticketId
+      - orderId
+      - eventId
+      - seatId
+      - issuedAt
+      properties:
+        ticketId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        seatId:
+          type: string
+          format: uuid
+        issuedAt:
+          type: string
+          format: date-time
+    Order:
+      type: object
+      additionalProperties: false
+      required:
+      - orderId
+      - customerId
+      - eventId
+      - seatId
+      - reservationId
+      - paymentId
+      - status
+      - cancelRequested
+      - attentionRequired
+      - createdAt
+      - updatedAt
+      - aggregateVersion
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          minLength: 1
+        eventId:
+          type: string
+          format: uuid
+        seatId:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - RESERVING
+          - AWAITING_PAYMENT
+          - CONFIRMING
+          - COMPENSATING
+          - CONFIRMED
+          - CANCELLED
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000
+          description: Сумма в копейках; без float.
+        currency:
+          type: string
+          enum:
+          - RUB
+        expiresAt:
+          type: string
+          format: date-time
+        paymentUrl:
+          type: string
+          format: uri
+        ticket:
+          $ref: '#/components/schemas/Ticket'
+        cancelRequested:
+          type: boolean
+        attentionRequired:
+          type: boolean
+        failureReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        aggregateVersion:
+          type: integer
+          minimum: 1
+      description: До получения резерва цена и expiresAt отсутствуют. paymentUrl отсутствует до готовности страницы
+        оплаты. ticket присутствует только при CONFIRMED; при CANCELLED его нет. paymentId предвыделен и не доказывает
+        существование платежа.

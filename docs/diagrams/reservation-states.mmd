@@ -1,0 +1,9 @@
+stateDiagram-v2
+  [*] --> HELD: атомарный резерв
+  [*] --> RELEASED: освобождение до создания, tombstone
+  HELD --> CONFIRMED: подтверждение до expiresAt
+  HELD --> EXPIRED: срок истёк
+  HELD --> RELEASED: компенсация
+  CONFIRMED --> [*]
+  EXPIRED --> [*]
+  RELEASED --> [*]

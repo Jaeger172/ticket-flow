@@ -1,0 +1,613 @@
+openapi: 3.0.3
+info:
+  title: Ticket Flow — Payment Provider Simulator API
+  version: 1.0.0
+  description: Проектный контракт имитатора внешнего провайдера для второй части. Это не API реального банка. Стабильный
+    merchantPaymentId равен paymentId Ticket Flow. Повтор с тем же ID не списывает повторно. После terminal CANCELLED
+    / DECLINED / REFUNDED новый CAPTURED запрещён.
+servers:
+- url: http://localhost:8090
+  description: Локальное демо; внешняя граница использует HTTPS.
+security:
+- ServiceToken: []
+paths:
+  /charges/{paymentId}:
+    put:
+      operationId: createCharge
+      summary: Создать списание / платёжную страницу
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '201':
+          description: Создан PENDING с paymentUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '200':
+          description: Существующая операция с текущим статусом
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '409':
+          description: Другое тело под ID или отменённый ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCharge'
+    get:
+      operationId: getCharge
+      summary: Сверить финансовую истину
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Текущий статус и монотонная providerVersion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '404':
+          description: Операция не найдена; это не отменяет уже отправленный неизвестный create
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /charges/{paymentId}/cancellation:
+    put:
+      operationId: cancelCharge
+      summary: Закрыть возможность списания
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '200':
+          description: CANCELLED / DECLINED / REFUNDED, либо CAPTURED с требованием возврата
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '409':
+          description: Чужой orderId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerCommand'
+      description: Атомарно запрещает будущий CAPTURED для PENDING. Отсутствующий ID сохраняется как CANCELLED tombstone
+        с orderId. Уже CAPTURED остаётся CAPTURED; Payments обязан вызвать refund. Не означает возврат денег.
+  /charges/{paymentId}/refund:
+    put:
+      operationId: refundCharge
+      summary: Полностью вернуть списанное
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '200':
+          description: REFUNDED; повтор возвращает тот же результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '404':
+          description: Операция не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Нет CAPTURED либо чужой orderId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerCommand'
+      description: Только CAPTURED → REFUNDED; сумма полная. Idempotency-Key = paymentId:refund. Потеря HTTP-ответа
+        разрешается GET / повтором; второго денежного эффекта нет.
+  /pay/{paymentId}:
+    get:
+      operationId: openPaymentPage
+      summary: Открыть демонстрационную страницу провайдера
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: HTML-страница без передачи карточных данных в Ticket Flow
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Платёж не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+  /demo/charges/{paymentId}/outcome:
+    post:
+      operationId: setDemoOutcome
+      summary: Управлять результатом для демонстрации
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Финансовый факт сохранён; callback может быть задержан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '404':
+          description: Платёж не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Конечный статус запрещает выбранный переход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DemoOutcome'
+      description: Только тестовое окружение и сервисный токен. Задержка относится к отправке callback, не к GET
+        финансовой истины. Для запоздалого фактического списания вызывается позднее, пока операция ещё PENDING.
+        Callback отправляется Payments на /webhooks/provider, тело описано в payments.openapi.yaml.
+components:
+  securitySchemes:
+    ServiceToken:
+      type: http
+      scheme: bearer
+      description: Сервисный токен из окружения, внутренние API закрыты от браузера.
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - correlationId
+      properties:
+        code:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+        correlationId:
+          type: string
+          format: uuid
+    OwnerCommand:
+      type: object
+      additionalProperties: false
+      required:
+      - orderId
+      properties:
+        orderId:
+          type: string
+          format: uuid
+    CreateCharge:
+      type: object
+      additionalProperties: false
+      required:
+      - orderId
+      - amountMinor
+      - currency
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000
+          description: Сумма в копейках; без float.
+        currency:
+          type: string
+          enum:
+          - RUB
+    Charge:
+      type: object
+      additionalProperties: false
+      required:
+      - paymentId
+      - orderId
+      - status
+      - cancelRequested
+      - providerVersion
+      - createdAt
+      - updatedAt
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - PENDING
+          - CAPTURED
+          - DECLINED
+          - CANCELLED
+          - REFUNDED
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000
+          description: Сумма в копейках; без float.
+        currency:
+          type: string
+          enum:
+          - RUB
+        paymentUrl:
+          type: string
+          format: uri
+        cancelRequested:
+          type: boolean
+        providerVersion:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      description: amountMinor и currency присутствуют у созданного списания; могут отсутствовать только у CANCELLED
+        tombstone. CAPTURED — факт списания. GET REFUNDED — доказательство полного возврата.
+    DemoOutcome:
+      type: object
+      additionalProperties: false
+      required:
+      - outcome
+      - delayCallbackSeconds
+      properties:
+        outcome:
+          type: string
+          enum:
+          - CAPTURED
+          - DECLINED
+        delayCallbackSeconds:
+          type: integer
+          minimum: 0
+          maximum: 900

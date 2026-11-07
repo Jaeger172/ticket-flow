@@ -1,0 +1,17 @@
+sequenceDiagram
+  autonumber
+  participant O as Orders
+  participant R as Reservations
+  participant P as Payments
+  participant X as Provider
+  Note over O,P: Заказ ожидает оплату, резерв HELD
+  X->>P: Подписанный callback FAILED
+  Note over P: FAILED + outbox
+  P-->>O: PaymentFailed через RabbitMQ
+  Note over O: COMPENSATING, cancelRequested=true
+  O->>R: PUT: освободить резерв
+  R-->>O: 200 RELEASED
+  O->>P: PUT: отменить оплату
+  P-->>O: 200 FAILED, списания нет
+  Note over O: Оба результата конечные: CANCELLED
+  Note over O,P: Повтор события или команды не меняет эффект
