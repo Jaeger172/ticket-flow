@@ -1,0 +1,14 @@
+stateDiagram-v2
+  [*] --> PENDING: локальная запись и задание
+  [*] --> CANCELLED: отмена до создания, tombstone
+  PENDING --> SUCCEEDED: провайдер подтвердил списание
+  PENDING --> FAILED: окончательный отказ
+  PENDING --> CANCEL_PENDING: запрошена отмена
+  SUCCEEDED --> REFUND_PENDING: запрошена компенсация
+  CANCEL_PENDING --> CANCELLED: подтверждено отсутствие списания
+  CANCEL_PENDING --> FAILED: окончательный отказ провайдера
+  CANCEL_PENDING --> REFUND_PENDING: обнаружено списание
+  REFUND_PENDING --> REFUNDED: возврат подтверждён
+  FAILED --> [*]
+  CANCELLED --> [*]
+  REFUNDED --> [*]

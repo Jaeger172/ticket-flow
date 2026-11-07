@@ -1,0 +1,16 @@
+{
+  "name": "ticket-flow-architecture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Architecture documentation for Ticket Flow",
+  "scripts": {
+    "docs:render": "node docs/tools/render.mjs",
+    "docs:check": "node docs/tools/validate.mjs"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "12.1.0",
+    "@asyncapi/parser": "3.6.0",
+    "@mermaid-js/mermaid-cli": "11.12.0",
+    "yaml": "2.8.1"
+  }
+}

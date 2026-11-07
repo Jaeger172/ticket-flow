@@ -1,0 +1,690 @@
+openapi: 3.0.3
+info:
+  title: Ticket Flow — Reservations API
+  version: 1.0.0
+  description: Каталог и единственный владелец доступности мест. Срок HELD равен 10 минутам по времени этой БД.
+    Каждый повтор команды проверяет идентичность владельца и тела; успешный повтор возвращает текущее состояние
+    без нового эффекта.
+servers:
+- url: http://localhost:8082
+  description: Локальное демо; внешняя граница использует HTTPS.
+security:
+- ServiceToken: []
+paths:
+  /events:
+    get:
+      operationId: listEvents
+      summary: Получить заранее заведённые мероприятия
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      responses:
+        '200':
+          description: Мероприятия
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+  /events/{eventId}/seats:
+    get:
+      operationId: listSeats
+      summary: Посмотреть места мероприятия
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Справочная доступность, не гарантия брони
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Seat'
+        '404':
+          description: Мероприятие не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+  /internal/reservations/{reservationId}:
+    put:
+      operationId: createReservation
+      summary: Создать временный резерв
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: reservationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '201':
+          description: Создан HELD; цена зафиксирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '200':
+          description: Текущее состояние ранее созданного резерва
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '404':
+          description: Мероприятие или место не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Место занято, ID связан с иным запросом или ранее отменён tombstone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservation'
+      description: Блокировка строки места и проверка активного владельца в одной транзакции. Просроченный HELD
+        освобождается перед резервированием. Повтор не продлевает expiresAt. Под тем же reservationId другой orderId/eventId/seatId
+        запрещён; CANCEL tombstone не оживает.
+    get:
+      operationId: getReservation
+      summary: Выяснить достоверный результат операции
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: reservationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Актуальное состояние, срок материализован при чтении
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '404':
+          description: ID не найден; неизвестный create следует повторить с прежними ID и ключом
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /internal/reservations/{reservationId}/confirmation:
+    post:
+      operationId: confirmReservation
+      summary: Закрепить место за заказом
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: reservationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '200':
+          description: Резерв CONFIRMED, в том числе безопасный повтор
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '404':
+          description: Резерв отсутствует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Истёкший / освобождённый резерв либо чужой orderId; нужно прочитать ресурс
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerCommand'
+      description: Только HELD и now < expiresAt под блокировкой места. При now >= expiresAt фиксирует EXPIRED и
+        outbox перед ответом 409. CONFIRMED для того же заказа возвращает 200 даже после бывшего expiresAt.
+  /internal/reservations/{reservationId}/release:
+    put:
+      operationId: releaseReservation
+      summary: Освободить старый резерв при компенсации
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: reservationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '200':
+          description: RELEASED или EXPIRED; при отсутствии создан RELEASED tombstone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '409':
+          description: Резерв уже CONFIRMED или принадлежит другому заказу
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerCommand'
+      description: 'Адресуется reservationId, не место. Не затрагивает чужой новый резерв. HELD становится RELEASED,
+        EXPIRED / RELEASED сохраняются. При отсутствующем ID создаётся tombstone: последующий create получает 409.
+        Если найден CONFIRMED, Orders обязан разрешить итог продажи, а не автоматически возвращать деньги.'
+components:
+  securitySchemes:
+    ServiceToken:
+      type: http
+      scheme: bearer
+      description: Сервисный токен из окружения, внутренние API закрыты от браузера.
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - correlationId
+      properties:
+        code:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+        correlationId:
+          type: string
+          format: uuid
+    OwnerCommand:
+      type: object
+      additionalProperties: false
+      required:
+      - orderId
+      properties:
+        orderId:
+          type: string
+          format: uuid
+    Event:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - title
+      - startsAt
+      - venue
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        startsAt:
+          type: string
+          format: date-time
+        venue:
+          type: string
+          minLength: 1
+    Seat:
+      type: object
+      additionalProperties: false
+      required:
+      - seatId
+      - eventId
+      - row
+      - number
+      - availability
+      - amountMinor
+      - currency
+      properties:
+        seatId:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        row:
+          type: string
+        number:
+          type: string
+        availability:
+          type: string
+          enum:
+          - AVAILABLE
+          - HELD
+          - SOLD
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000
+          description: Сумма в копейках; без float.
+        currency:
+          type: string
+          enum:
+          - RUB
+    CreateReservation:
+      type: object
+      additionalProperties: false
+      required:
+      - orderId
+      - eventId
+      - seatId
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        seatId:
+          type: string
+          format: uuid
+    ReservationRecord:
+      type: object
+      additionalProperties: false
+      required:
+      - reservationId
+      - orderId
+      - eventId
+      - seatId
+      - status
+      - amountMinor
+      - currency
+      - expiresAt
+      - tombstone
+      - createdAt
+      - updatedAt
+      - aggregateVersion
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        seatId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - HELD
+          - CONFIRMED
+          - RELEASED
+          - EXPIRED
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000
+          description: Сумма в копейках; без float.
+        currency:
+          type: string
+          enum:
+          - RUB
+        expiresAt:
+          type: string
+          format: date-time
+        tombstone:
+          type: boolean
+          enum:
+          - false
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        aggregateVersion:
+          type: integer
+          minimum: 1
+    ReservationTombstone:
+      type: object
+      additionalProperties: false
+      required:
+      - reservationId
+      - orderId
+      - status
+      - tombstone
+      - createdAt
+      - updatedAt
+      - aggregateVersion
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - RELEASED
+        tombstone:
+          type: boolean
+          enum:
+          - true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        aggregateVersion:
+          type: integer
+          minimum: 1
+      description: Освобождение до создания. Сохраняет запрет на поздний create, не занимает место.
+    Reservation:
+      oneOf:
+      - $ref: '#/components/schemas/ReservationRecord'
+      - $ref: '#/components/schemas/ReservationTombstone'

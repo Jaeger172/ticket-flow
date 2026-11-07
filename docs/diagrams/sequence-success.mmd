@@ -1,0 +1,33 @@
+sequenceDiagram
+  autonumber
+  participant U as Web UI
+  participant O as Orders
+  participant R as Reservations
+  participant P as Payments
+  participant X as Provider
+  U->>O: POST /orders + Idempotency-Key
+  Note over O: Транзакция: RESERVING, ID и задание
+  O-->>U: 202 + orderId
+  O->>R: PUT: создать резерв
+  R-->>O: 201 HELD, цена, expiresAt
+  Note over O: Сохранить цену и AWAITING_PAYMENT
+  O->>P: PUT: создать оплату
+  P-->>O: 202 PENDING
+  P->>X: PUT: создать списание
+  X-->>P: PENDING + paymentUrl
+  O->>P: GET: состояние оплаты
+  P-->>O: PENDING + paymentUrl
+  Note over O: Сохранить ссылку в заказе
+  U->>O: GET /orders/{id}
+  O-->>U: AWAITING_PAYMENT + paymentUrl
+  U->>X: Переход и оплата на стороне провайдера
+  X->>P: Подписанный callback CAPTURED
+  Note over P: SUCCEEDED + outbox одной транзакцией
+  P-->>O: PaymentSucceeded через RabbitMQ
+  Note over O: Inbox + CONFIRMING + задание
+  O->>R: POST: закрепить место
+  Note over R: Блокировка места, проверка срока
+  R-->>O: 200 CONFIRMED
+  Note over O: Транзакция: CONFIRMED, билет, outbox
+  U->>O: GET /orders/{id}
+  O-->>U: CONFIRMED + уникальный ticketId

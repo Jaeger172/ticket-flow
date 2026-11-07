@@ -1,0 +1,22 @@
+sequenceDiagram
+  autonumber
+  participant P as Payments
+  participant B as RabbitMQ
+  participant O as Orders
+  participant R as Reservations
+  P->>B: PaymentSucceeded, messageId=M
+  B->>O: Доставка M
+  Note over O: Commit: inbox M, CONFIRMING, задание confirm
+  Note over O: Падение до ACK, затем перезапуск
+  B->>O: Повторная доставка M
+  Note over O: Inbox содержит M, повторного эффекта нет
+  O-->>B: ACK
+  Note over O: Worker подбирает сохранённое задание
+  O->>R: POST: закрепить место
+  Note over R: Commit CONFIRMED
+  R--xO: HTTP-ответ потерян
+  Note over O: Тайм-аут не запускает возврат
+  O->>R: GET: состояние резерва
+  R-->>O: 200 CONFIRMED, прежний orderId
+  Note over O: Commit: билет и CONFIRMED
+  Note over P,R: Нет повторного списания или второй продажи

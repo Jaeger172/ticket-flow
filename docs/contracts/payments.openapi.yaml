@@ -1,0 +1,552 @@
+openapi: 3.0.3
+info:
+  title: Ticket Flow — Payments API
+  version: 1.0.0
+  description: Сохраняет локальную операцию, работает с провайдером фоновыми заданиями. Неизвестный ответ не считается
+    отказом. cancelRequested монотонен. В MVP один платёж и один полный возврат на заказ.
+servers:
+- url: http://localhost:8083
+  description: Локальное демо; внешняя граница использует HTTPS.
+security:
+- ServiceToken: []
+paths:
+  /internal/payments/{paymentId}:
+    put:
+      operationId: createPayment
+      summary: Создать платёж и сохранить задание провайдеру
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '202':
+          description: PENDING и задание сохранены; paymentUrl может ещё отсутствовать
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '200':
+          description: 'Повтор: актуальное состояние той же операции'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '409':
+          description: ID связан с другим телом / заказом или существует CANCELLED tombstone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePayment'
+      description: Orders — доверенный отправитель цены из Reservations. Цена, RUB, orderId и reservationId неизменяемы.
+        UNIQUE(orderId) и UNIQUE(paymentId) запрещают вторую оплату; повтор не создаёт новый платёж у провайдера.
+    get:
+      operationId: getPayment
+      summary: Узнать локальный финансовый результат
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Актуальный локальный снимок; неизвестный provider-result остаётся PENDING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: ID не найден; повторить исходный create либо монотонную отмену
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /internal/payments/{paymentId}/cancellation:
+    put:
+      operationId: cancelPayment
+      summary: Отменить оплату или вернуть уже списанное
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+        description: 'Стабильный ключ caller + операция + запрос. Иное тело под тем же ключом: 409. Повтор не создаёт
+          новый ресурс.'
+      responses:
+        '202':
+          description: CANCEL_PENDING или REFUND_PENDING; работа продолжается
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '200':
+          description: Конечный результат FAILED / CANCELLED / REFUNDED, в том числе tombstone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '409':
+          description: ID принадлежит другому заказу
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Некорректные поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Отсутствует или не принят токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerCommand'
+      description: Сначала сохраняет cancelRequested=true. Если списание доказано — полный возврат. Если результат
+        неизвестен — сверка / отмена у провайдера до конечного ответа. При отсутствии ID создаёт CANCELLED tombstone
+        и блокирует поздний create. PENDING никогда не трактуется как отсутствие списания. При SUCCEEDED возвращает
+        202 REFUND_PENDING, не 200 SUCCEEDED.
+  /webhooks/provider:
+    post:
+      operationId: receiveProviderCallback
+      summary: Принять подписанный факт провайдера
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Если отсутствует, сервис создаёт UUID; в Saga равен orderId.
+      - name: X-Provider-Timestamp
+        in: header
+        required: true
+        schema:
+          type: integer
+          format: int64
+        description: Unix seconds; входит в HMAC.
+      responses:
+        '202':
+          description: Callback надёжно сохранён; дубликат также подтверждается
+        '400':
+          description: Неверное тело / ID / сумма; нужна диагностика
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Неверная подпись или слишком старый timestamp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Нет прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Ограничение частоты; соблюдать Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Секунды до следующей попытки.
+        '503':
+          description: Временная недоступность; повтор с прежним ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderCallback'
+      security:
+      - ProviderSignature: []
+      description: Успешный ответ только после durable-save callback и бизнес-изменения / задания сверки. Неизвестный
+        paymentId сохраняется для диагностики и сверки, не создаёт покупку. callbackId дедуплицируется. Старый callback
+        не откатывает статус; конфликт версий требует GET провайдера. URL, куда вернуть покупателя, не является
+        webhook.
+components:
+  securitySchemes:
+    ServiceToken:
+      type: http
+      scheme: bearer
+      description: Сервисный токен из окружения, внутренние API закрыты от браузера.
+    ProviderSignature:
+      type: apiKey
+      in: header
+      name: X-Provider-Signature
+      description: hex HMAC-SHA256(secret, X-Provider-Timestamp + "." + rawBody). Проверяется до разбора тела; допустимое
+        отклонение timestamp 300 секунд.
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - correlationId
+      properties:
+        code:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+        correlationId:
+          type: string
+          format: uuid
+    OwnerCommand:
+      type: object
+      additionalProperties: false
+      required:
+      - orderId
+      properties:
+        orderId:
+          type: string
+          format: uuid
+    CreatePayment:
+      type: object
+      additionalProperties: false
+      required:
+      - orderId
+      - reservationId
+      - amountMinor
+      - currency
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000
+          description: Сумма в копейках; без float.
+        currency:
+          type: string
+          enum:
+          - RUB
+    PaymentRecord:
+      type: object
+      additionalProperties: false
+      required:
+      - paymentId
+      - orderId
+      - reservationId
+      - status
+      - amountMinor
+      - currency
+      - cancelRequested
+      - tombstone
+      - createdAt
+      - updatedAt
+      - aggregateVersion
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - PENDING
+          - SUCCEEDED
+          - FAILED
+          - CANCEL_PENDING
+          - CANCELLED
+          - REFUND_PENDING
+          - REFUNDED
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000
+          description: Сумма в копейках; без float.
+        currency:
+          type: string
+          enum:
+          - RUB
+        paymentUrl:
+          type: string
+          format: uri
+        cancelRequested:
+          type: boolean
+        tombstone:
+          type: boolean
+          enum:
+          - false
+        providerVersion:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        aggregateVersion:
+          type: integer
+          minimum: 1
+    PaymentTombstone:
+      type: object
+      additionalProperties: false
+      required:
+      - paymentId
+      - orderId
+      - status
+      - cancelRequested
+      - tombstone
+      - createdAt
+      - updatedAt
+      - aggregateVersion
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - CANCELLED
+        cancelRequested:
+          type: boolean
+          enum:
+          - true
+        tombstone:
+          type: boolean
+          enum:
+          - true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        aggregateVersion:
+          type: integer
+          minimum: 1
+      description: Отмена до создания платежа. Провайдер не вызывался, поздний create запрещён.
+    Payment:
+      oneOf:
+      - $ref: '#/components/schemas/PaymentRecord'
+      - $ref: '#/components/schemas/PaymentTombstone'
+    ProviderCallback:
+      type: object
+      additionalProperties: false
+      required:
+      - callbackId
+      - paymentId
+      - orderId
+      - status
+      - providerVersion
+      - occurredAt
+      properties:
+        callbackId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - PENDING
+          - CAPTURED
+          - DECLINED
+          - CANCELLED
+          - REFUNDED
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000
+          description: Сумма в копейках; без float.
+        currency:
+          type: string
+          enum:
+          - RUB
+        providerVersion:
+          type: integer
+          minimum: 1
+        occurredAt:
+          type: string
+          format: date-time
+      description: Для CAPTURED / REFUNDED обязательны сумма и валюта, равные локальному платежу. При CANCELLED
+        tombstone суммы может не быть. callbackId сохраняется при повторе; timestamp подписи при повторной отправке
+        свежий.
